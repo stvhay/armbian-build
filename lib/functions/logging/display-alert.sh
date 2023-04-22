@@ -1,3 +1,12 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
 function display_alert() {
 	# If asked, avoid any fancy ANSI escapes completely. For python-driven log collection. Formatting could be improved.
 	# If used, also does not write to logfile even if it exists.
@@ -6,7 +15,7 @@ function display_alert() {
 		if [[ "${POOR_MAN_PROFILER}" == "yes" ]]; then
 			poor_man_profiler
 		fi
-		echo -e "${extra_profiler}${*}" | sed 's/\x1b\[[0-9;]*m//g' >&2
+		echo -e "${extra_profiler}${3}::${1} ${2}" | sed 's/\x1b\[[0-9;]*m//g' >&2
 		return 0
 	fi
 

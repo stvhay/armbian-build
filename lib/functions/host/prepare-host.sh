@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
 # prepare_host
 #
 # * checks and installs necessary packages
@@ -11,6 +19,10 @@ function prepare_host() {
 }
 
 function assert_prepared_host() {
+	if [[ "${PRE_PREPARED_HOST:-"no"}" == "yes" ]]; then
+		return 0
+	fi
+
 	if [[ ${prepare_host_has_already_run:-0} -lt 1 ]]; then
 		exit_with_error "assert_prepared_host: Host has not yet been prepared. This is a bug in armbian-next code. Please report!"
 	fi
@@ -105,11 +117,12 @@ function prepare_host_noninteractive() {
 		download_external_toolchains # Mostly deprecated, since SKIP_EXTERNAL_TOOLCHAINS=yes is the default
 	fi
 
-	# if we're building an image, not only packages...
+	# NEEDS_BINFMT=yes is set by default build and rootfs artifact build.
+	# if we're building an image, not only packages/artifacts...
 	# ... and the host arch does not match the target arch ...
 	# ... we then require binfmt_misc to be enabled.
 	# "enable arm binary format so that the cross-architecture chroot environment will work"
-	if [[ "${KERNEL_ONLY}" != "yes" ]] || [[ "${NEEDS_BINFMT:-"no"}" == "yes" ]]; then
+	if [[ "${NEEDS_BINFMT:-"no"}" == "yes" ]]; then
 
 		if [[ "${SHOW_DEBUG}" == "yes" ]]; then
 			display_alert "Debugging binfmt - early" "/proc/sys/fs/binfmt_misc/" "debug"
@@ -264,12 +277,12 @@ function adaptative_prepare_host_dependencies() {
 		zlib1g-dev
 
 		# by-category below
-		file tree expect                     # logging utilities; expect is needed for 'unbuffer' command
-		colorized-logs                       # for ansi2html, ansi2txt, pipetty
-		unzip zip pigz pixz pbzip2 lzop zstd # compressors et al
-		parted gdisk fdisk                   # partition tools @TODO why so many?
-		aria2 curl wget axel                 # downloaders et al
-		parallel                             # do things in parallel (used for fast md5 hashing in initrd cache)
+		file tree expect                           # logging utilities; expect is needed for 'unbuffer' command
+		colorized-logs                             # for ansi2html, ansi2txt, pipetty
+		unzip zip pigz xz-utils pbzip2 lzop zstd   # compressors et al
+		parted gdisk fdisk                         # partition tools @TODO why so many?
+		aria2 curl wget axel                       # downloaders et al
+		parallel                                   # do things in parallel (used for fast md5 hashing in initrd cache)
 	)
 
 	# @TODO: distcc -- handle in extension?
@@ -281,8 +294,8 @@ function adaptative_prepare_host_dependencies() {
 	host_dependencies+=("python3-dev" "python3-distutils" "python3-setuptools" "python3-pip")
 
 	# Python2 -- required for some older u-boot builds
-	# Debian 'sid' does not carry python2 anymore; in this case some u-boot's might fail to build.
-	if [[ "sid bookworm" == *"${host_release}"* ]]; then
+	# Debian 'sid'/'bookworm' and Ubuntu 'lunar' does not carry python2 anymore; in this case some u-boot's might fail to build.
+	if [[ "sid bookworm lunar" == *"${host_release}"* ]]; then
 		display_alert "Python2 not available on host release '${host_release}'" "old(er) u-boot builds might/will fail" "wrn"
 	else
 		host_dependencies+=("python2" "python2-dev")
@@ -317,7 +330,7 @@ function adaptative_prepare_host_dependencies() {
 		host_dependencies+=(libc6-amd64-cross) # Support for running x86 binaries (under qemu on other arches)
 	fi
 
-	export EXTRA_BUILD_DEPS=""
+	declare -g EXTRA_BUILD_DEPS=""
 	call_extension_method "add_host_dependencies" <<- 'ADD_HOST_DEPENDENCIES'
 		*run before installing host dependencies*
 		you can add packages to install, space separated, to ${EXTRA_BUILD_DEPS} here.
@@ -328,7 +341,7 @@ function adaptative_prepare_host_dependencies() {
 		host_dependencies+=(${EXTRA_BUILD_DEPS})
 	fi
 
-	export FINAL_HOST_DEPS="${host_dependencies[*]}"
+	declare -g FINAL_HOST_DEPS="${host_dependencies[*]}"
 	call_extension_method "host_dependencies_known" <<- 'HOST_DEPENDENCIES_KNOWN'
 		*run after all host dependencies are known (but not installed)*
 		At this point we can read `${FINAL_HOST_DEPS}`, but changing won't have any effect.

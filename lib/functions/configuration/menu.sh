@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
+#!/usr/bin/env bash
 
 # Stuff involving dialog
 
@@ -10,8 +19,8 @@
 # otherwise it will NOT exit with error, even if user cancelled.
 # This is a boring topic, see https://askubuntu.com/questions/491509/how-to-get-dialog-box-input-directed-to-a-variable
 function dialog_if_terminal_set_vars() {
-	export DIALOG_RESULT=""
-	export DIALOG_EXIT_CODE=0
+	declare -g DIALOG_RESULT=""
+	declare -g DIALOG_EXIT_CODE=0
 
 	[[ ! -t 0 ]] && exit_with_error "stdin is not a terminal. can't use dialog." "dialog_if_terminal_set_vars ${*}" "err"
 	[[ ! -t 1 ]] && exit_with_error "stdout is not a terminal. can't use dialog." "dialog_if_terminal_set_vars ${*}" "err"
@@ -42,7 +51,7 @@ function dialog_if_terminal_set_vars() {
 
 # Myy : Menu configuration for choosing desktop configurations
 dialog_menu() {
-	export DIALOG_MENU_RESULT=""
+	declare -g DIALOG_MENU_RESULT=""
 	provided_title=$1
 	provided_backtitle=$2
 	provided_menuname=$3
@@ -53,7 +62,7 @@ dialog_menu() {
 
 # Almost identical, but is a checklist instead of menu
 dialog_checklist() {
-	export DIALOG_CHECKLIST_RESULT=""
+	declare -g DIALOG_CHECKLIST_RESULT=""
 	provided_title=$1
 	provided_backtitle=$2
 	provided_menuname=$3

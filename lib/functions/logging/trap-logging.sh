@@ -1,3 +1,12 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
 # Cleanup for logging.
 function trap_handler_cleanup_logging() {
 	[[ "x${LOGDIR}x" == "xx" ]] && return 0
@@ -59,6 +68,11 @@ function trap_handler_cleanup_logging() {
 		display_alert "Not archiving old logs." "CI=${CI:-false}, SKIP_LOG_ARCHIVE=${SKIP_LOG_ARCHIVE:-no}" "debug"
 	fi
 
+	# Gather repeat build args, included in the logs.
+	declare -g repeat_args=()
+	produce_repeat_args_array # produces repeat_args
+	declare repeat_args_string="${repeat_args[*]}"
+
 	## Here -- we need to definitely stop logging, cos we're gonna consolidate and delete the logs.
 	display_alert "End of logging" "STOP LOGGING: CURRENT_LOGFILE: ${CURRENT_LOGFILE}" "debug"
 
@@ -100,6 +114,8 @@ function trap_handler_cleanup_logging() {
 		display_alert "Exporting Markdown logs to GitHub Actions" "GITHUB_STEP_SUMMARY: '${GITHUB_STEP_SUMMARY}'" "info"
 		cat "${markdown_log_file}" >> "${GITHUB_STEP_SUMMARY}" || true
 	fi
+
+	unset repeat_args_string
 
 	discard_logs_tmp_dir
 }

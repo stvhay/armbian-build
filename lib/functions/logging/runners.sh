@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
 
 # All those runner helper functions have a particular non-quoting style.
 # callers might need to force quote with bash's @Q modifier.
@@ -32,8 +39,12 @@ function chroot_sdcard_apt_get_remove() {
 
 function chroot_sdcard_apt_get() {
 	acng_check_status_or_restart # make sure apt-cacher-ng is running OK.
+	declare default_apt_logging="-qq"
+	if [[ "${SHOW_DEBUG}" == "yes" ]]; then
+		default_apt_logging=""
+	fi
 
-	local -a apt_params=("-y" "${apt_logging:-"-qq"}") # super quiet by default, but can be tweaked up, for update for example
+	local -a apt_params=("-y" "${apt_logging:-"$default_apt_logging"}") # super quiet by default, but can be tweaked up, for update for example
 	if [[ "${MANAGE_ACNG}" == "yes" ]]; then
 		display_alert "Using managed apt-cacher-ng" "http://localhost:3142" "debug"
 		apt_params+=(
@@ -75,11 +86,11 @@ function chroot_sdcard_apt_get() {
 	local_apt_deb_cache_prepare "before 'apt-get $*'" # sets LOCAL_APT_CACHE_INFO
 	if [[ "${LOCAL_APT_CACHE_INFO[USE]}" == "yes" ]]; then
 		# prepare and mount apt cache dir at /var/cache/apt/archives in the SDCARD.
-		run_host_command_logged mkdir -pv "${LOCAL_APT_CACHE_INFO[SDCARD_DEBS_DIR]}" "${LOCAL_APT_CACHE_INFO[SDCARD_LISTS_DIR]}"
+		skip_error_info="yes" run_host_command_logged mkdir -pv "${LOCAL_APT_CACHE_INFO[SDCARD_DEBS_DIR]}" "${LOCAL_APT_CACHE_INFO[SDCARD_LISTS_DIR]}"
 		display_alert "Mounting local apt deb cache dir" "${LOCAL_APT_CACHE_INFO[SDCARD_DEBS_DIR]}" "debug"
-		run_host_command_logged mount --bind "${LOCAL_APT_CACHE_INFO[HOST_DEBS_DIR]}" "${LOCAL_APT_CACHE_INFO[SDCARD_DEBS_DIR]}"
+		skip_error_info="yes" run_host_command_logged mount --bind "${LOCAL_APT_CACHE_INFO[HOST_DEBS_DIR]}" "${LOCAL_APT_CACHE_INFO[SDCARD_DEBS_DIR]}"
 		display_alert "Mounting local apt list cache dir" "${LOCAL_APT_CACHE_INFO[SDCARD_LISTS_DIR]}" "debug"
-		run_host_command_logged mount --bind "${LOCAL_APT_CACHE_INFO[HOST_LISTS_DIR]}" "${LOCAL_APT_CACHE_INFO[SDCARD_LISTS_DIR]}"
+		skip_error_info="yes" run_host_command_logged mount --bind "${LOCAL_APT_CACHE_INFO[HOST_LISTS_DIR]}" "${LOCAL_APT_CACHE_INFO[SDCARD_LISTS_DIR]}"
 	fi
 
 	local chroot_apt_result=1
@@ -200,10 +211,14 @@ function run_host_command_logged_raw() {
 		display_alert_skip_screen=1 display_alert "stacktrace for failed command" "exit code ${exit_code}:$*\n$(stack_color="${magenta_color:-}" show_caller_full)" "wrn"
 
 		# Obtain extra info about error, eg, log files produced, extra messages set by caller, etc.
-		logging_enrich_run_command_error_info
+		if [[ "${skip_error_info:-"no"}" != "yes" ]]; then
+			logging_enrich_run_command_error_info
+		fi
 	fi
 
-	logging_clear_run_command_error_info # clear the error info vars, always, otherwise they'll leak into the next invocation.
+	if [[ "${skip_error_info:-"no"}" != "yes" ]]; then
+		logging_clear_run_command_error_info # clear the error info vars, always, otherwise they'll leak into the next invocation.
+	fi
 
 	return ${exit_code} #  exiting with the same error code as the original error
 }
@@ -218,6 +233,7 @@ function logging_enrich_run_command_error_info() {
 	declare -a found_files=()
 
 	for path in "${if_error_find_files_sdcard[@]}"; do
+		display_alert "Searching for if_error_find_files_sdcard files" "${SDCARD}/${path}" "debug"
 		declare -a sdcard_files
 		# shellcheck disable=SC2086 # I wanna expand, thank you...
 		mapfile -t sdcard_files < <(find ${SDCARD}/${path} -type f)

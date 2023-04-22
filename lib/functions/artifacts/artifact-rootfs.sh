@@ -1,6 +1,30 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
+function artifact_rootfs_config_dump() {
+	artifact_input_variables[ARCH]="${ARCH}"
+	artifact_input_variables[RELEASE]="${RELEASE}"
+	artifact_input_variables[SELECTED_CONFIGURATION]="${SELECTED_CONFIGURATION}" # should be represented below anyway
+	artifact_input_variables[BUILD_MINIMAL]="${BUILD_MINIMAL}"
+	artifact_input_variables[DESKTOP_ENVIRONMENT]="${DESKTOP_ENVIRONMENT:-"no_DESKTOP_ENVIRONMENT_set"}"
+	artifact_input_variables[DESKTOP_ENVIRONMENT_CONFIG_NAME]="${DESKTOP_ENVIRONMENT_CONFIG_NAME:-"no_DESKTOP_ENVIRONMENT_CONFIG_NAME_set"}"
+	artifact_input_variables[DESKTOP_APPGROUPS_SELECTED]="${DESKTOP_APPGROUPS_SELECTED:-"no_DESKTOP_APPGROUPS_SELECTED_set"}"
+	# Hash of the packages added/removed by extensions
+	declare pkgs_hash="undetermined"
+	pkgs_hash="$(echo "${REMOVE_PACKAGES[*]} ${EXTRA_PACKAGES_ROOTFS[*]}" | sha256sum | cut -d' ' -f1)"
+	artifact_input_variables[EXTRA_PKG_ADD_REMOVE_HASH]="${pkgs_hash}"
+}
+
 function artifact_rootfs_prepare_version() {
 	artifact_version="undetermined"        # outer scope
 	artifact_version_reason="undetermined" # outer scope
+	[[ -z "${artifact_prefix_version}" ]] && exit_with_error "artifact_prefix_version is not set"
 
 	assert_requires_aggregation # Bombs if aggregation has not run
 
@@ -21,7 +45,7 @@ function artifact_rootfs_prepare_version() {
 	# @TODO: gotta include the extensions rootfs-modifying id to cache_type...
 
 	# outer scope
-	artifact_version="${rootfs_cache_id}"
+	artifact_version="${artifact_prefix_version}${rootfs_cache_id}"
 	artifact_version_reason="${reasons[*]}"
 	artifact_name="${ARCH}-${RELEASE}-${cache_type}"
 	artifact_type="tar.zst"
@@ -83,6 +107,7 @@ function artifact_rootfs_cli_adapter_pre_run() {
 }
 
 function artifact_rootfs_cli_adapter_config_prep() {
+	declare -g artifact_version_requires_aggregation="yes"
 	declare -g ROOTFS_COMPRESSION_RATIO="${ROOTFS_COMPRESSION_RATIO:-"15"}" # default to Compress stronger when we make rootfs cache
 
 	# If BOARD is set, use it to convert to an ARCH.
@@ -116,7 +141,7 @@ function artifact_rootfs_cli_adapter_config_prep() {
 }
 
 function artifact_rootfs_get_default_oci_target() {
-	artifact_oci_target_base="ghcr.io/armbian/cache-root/"
+	artifact_oci_target_base="${GHCR_SOURCE}/armbian/cache-root/"
 }
 
 function artifact_rootfs_is_available_in_local_cache() {

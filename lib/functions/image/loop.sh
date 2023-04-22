@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
+#!/usr/bin/env bash
 # check_loop_device <device_node>
 #
 function check_loop_device() {
@@ -79,7 +88,7 @@ function write_uboot_to_loop_image() {
 	display_alert "Writing u-boot bootloader" "$loop" "info"
 	write_uboot_platform "${TEMP_DIR}${DIR}" "$loop" # important: DIR is set in platform_install.sh sourced above.
 
-	export UBOOT_CHROOT_DIR="${TEMP_DIR}${DIR}"
+	declare -g UBOOT_CHROOT_DIR="${TEMP_DIR}${DIR}"
 
 	call_extension_method "post_write_uboot_platform" <<- 'POST_WRITE_UBOOT_PLATFORM'
 		*allow custom writing of uboot -- only during image build*

@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
 
 # Initialize and prepare the trap managers, one for each of ERR, INT, TERM and EXIT traps.
 # Bash goes insane regarding line numbers and other stuff if we try to overwrite the traps.
@@ -70,7 +77,7 @@ function main_trap_handler() {
 			fi
 
 			if [[ ${trap_exit_code} -gt 0 ]] && [[ "${ERROR_DEBUG_SHELL}" == "yes" ]]; then
-				export ERROR_DEBUG_SHELL=no # dont do it twice
+				declare -g ERROR_DEBUG_SHELL=no # dont do it twice
 				display_alert "MOUNT" "${MOUNT}" "debug"
 				display_alert "SDCARD" "${SDCARD}" "debug"
 				display_alert "ERROR_DEBUG_SHELL=yes, starting a shell." "ERROR_DEBUG_SHELL; exit to cleanup." "debug"

@@ -1,3 +1,22 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
+function artifact_kernel_config_dump() {
+	# BOARD is NOT included. See explanation below.
+	artifact_input_variables[LINUXFAMILY]="${LINUXFAMILY}"
+	artifact_input_variables[BRANCH]="${BRANCH}"
+	artifact_input_variables[KERNEL_MAJOR_MINOR]="${KERNEL_MAJOR_MINOR}"
+	artifact_input_variables[KERNELSOURCE]="${KERNELSOURCE}"
+	artifact_input_variables[KERNELBRANCH]="${KERNELBRANCH}"
+	artifact_input_variables[KERNELPATCHDIR]="${KERNELPATCHDIR}"
+}
+
 # This is run in a logging section.
 # Prepare the version, "sans-repos": just the armbian/build repo contents are available.
 # It is OK to reach out to the internet for a curl or ls-remote, but not for a git clone, but
@@ -5,16 +24,18 @@
 function artifact_kernel_prepare_version() {
 	artifact_version="undetermined"        # outer scope
 	artifact_version_reason="undetermined" # outer scope
+	[[ -z "${artifact_prefix_version}" ]] && exit_with_error "artifact_prefix_version is not set"
 
 	# - Given KERNELSOURCE and KERNELBRANCH, get:
 	#    - SHA1 of the commit (this is generic... and used for other pkgs)
-	#    - The first 10 lines of the root Makefile at that commit (cached lookup, same SHA1=same Makefile, http GET, not cloned)
+	#    - (unless KERNEL_SKIP_MAKEFILE_VERSION=yes) The first 10 lines of the root Makefile at that commit
+	#         (cached lookup, same SHA1=same Makefile, http GET, not cloned)
 	#      - This gives us the full version plus codename, plus catches "version shenanigans" possibly done by patches...
 	#    - @TODO: Make sure this is sane, ref KERNEL_MAJOR_MINOR; it's transitional, but we need to be sure it's sane.
 	# - Get the drivers patch hash (given LINUXFAMILY and the vX.Z.Y version) - the harness can do this by hashing patches and bash code
 	# - Get the kernel patches hash. (@TODO currently hashing files directly, use Python patching proper)
 	# - Get the kernel .config hash, composed of
-	#    - KERNELCONFIG .config hash (contents)
+	#    - KERNELCONFIG .config hash (contents); except if KERNEL_CONFIGURE=yes, then force "999999" (six-nines)
 	#    - extensions mechanism, each hook has an array of hashes that is then hashed together; see the hooks docs.
 	# - Hash of the relevant lib/ bash sources involved, say compilation/kernel*.sh etc
 	# All those produce a version string like:
@@ -45,12 +66,23 @@ function artifact_kernel_prepare_version() {
 	debug_var KERNELBRANCH
 	debug_var LINUXFAMILY
 	debug_var KERNELPATCHDIR
+	debug_var KERNEL_SKIP_MAKEFILE_VERSION
+	debug_var KERNEL_CONFIGURE
 
 	declare short_hash_size=4
 
 	declare -A GIT_INFO_KERNEL=([GIT_SOURCE]="${KERNELSOURCE}" [GIT_REF]="${KERNELBRANCH}")
-	run_memoized GIT_INFO_KERNEL "git2info" memoized_git_ref_to_info "include_makefile_body"
+
+	if [[ "${KERNEL_SKIP_MAKEFILE_VERSION:-"no"}" == "yes" ]]; then
+		display_alert "Skipping Makefile version for kernel" "due to KERNEL_SKIP_MAKEFILE_VERSION=yes" "info"
+		run_memoized GIT_INFO_KERNEL "git2info" memoized_git_ref_to_info
+	else
+		run_memoized GIT_INFO_KERNEL "git2info" memoized_git_ref_to_info "include_makefile_body"
+	fi
 	debug_dict GIT_INFO_KERNEL
+
+	# Sanity check, the SHA1 gotta be sane.
+	[[ "${GIT_INFO_KERNEL[SHA1]}" =~ ^[0-9a-f]{40}$ ]] || exit_with_error "SHA1 is not sane: '${GIT_INFO_KERNEL[SHA1]}'"
 
 	declare short_sha1="${GIT_INFO_KERNEL[SHA1]:0:${short_hash_size}}"
 
@@ -75,6 +107,13 @@ function artifact_kernel_prepare_version() {
 	config_hash="${hash_files}"
 	declare config_hash_short="${config_hash:0:${short_hash_size}}"
 
+	# detour: if KERNEL_CONFIGURE=yes, then force "999999" (six-nines)
+	if [[ "${KERNEL_CONFIGURE}" == "yes" ]]; then
+		display_alert "Forcing kernel config hash to 999999" "due to KERNEL_CONFIGURE=yes" "info"
+		config_hash="999999 (KERNEL_CONFIGURE=yes, unable to hash)"
+		config_hash_short="999999"
+	fi
+
 	# run the extensions. they _must_ behave, and not try to modify the .config, instead just fill kernel_config_modifying_hashes
 	declare kernel_config_modifying_hashes_hash="undetermined"
 	declare -a kernel_config_modifying_hashes=()
@@ -82,6 +121,26 @@ function artifact_kernel_prepare_version() {
 	kernel_config_modification_hash="$(echo "${kernel_config_modifying_hashes[@]}" | sha256sum | cut -d' ' -f1)"
 	kernel_config_modification_hash="${kernel_config_modification_hash:0:16}" # "long hash"
 	declare kernel_config_modification_hash_short="${kernel_config_modification_hash:0:${short_hash_size}}"
+
+	# Hash variables that affect the packaging of the kernel
+	declare -a vars_to_hash=(
+		"${KERNEL_INSTALL_TYPE}"
+		"${KERNEL_IMAGE_TYPE}"
+		"${KERNEL_EXTRA_TARGETS}"
+		"${NAME_KERNEL}"
+		"${SRC_LOADADDR}"
+	)
+	declare hash_vars="undetermined"
+	hash_vars="$(echo "${vars_to_hash[@]}" | sha256sum | cut -d' ' -f1)"
+	vars_config_hash="${hash_vars}"
+	declare var_config_hash_short="${vars_config_hash:0:${short_hash_size}}"
+
+	# Hash the extension hooks
+	declare -a extension_hooks_to_hash=("pre_package_kernel_image")
+	declare -a extension_hooks_hashed=("$(dump_extension_method_sources_functions "${extension_hooks_to_hash[@]}")")
+	declare hash_hooks="undetermined"
+	hash_hooks="$(echo "${extension_hooks_hashed[@]}" | sha256sum | cut -d' ' -f1)"
+	declare hash_hooks_short="${hash_hooks:0:${short_hash_size}}"
 
 	# @TODO: include the compiler version? host release?
 
@@ -91,8 +150,14 @@ function artifact_kernel_prepare_version() {
 	declare bash_hash="${hash_files}"
 	declare bash_hash_short="${bash_hash:0:${short_hash_size}}"
 
+	declare common_version_suffix="S${short_sha1}-D${kernel_drivers_hash_short}-P${kernel_patches_hash_short}-C${config_hash_short}H${kernel_config_modification_hash_short}-HK${hash_hooks_short}-V${var_config_hash_short}-B${bash_hash_short}"
+
 	# outer scope
-	artifact_version="${GIT_INFO_KERNEL[MAKEFILE_VERSION]}-S${short_sha1}-D${kernel_drivers_hash_short}-P${kernel_patches_hash_short}-C${config_hash_short}H${kernel_config_modification_hash_short}-B${bash_hash_short}"
+	if [[ "${KERNEL_SKIP_MAKEFILE_VERSION:-"no"}" == "yes" ]]; then
+		artifact_version="${artifact_prefix_version}${common_version_suffix}"
+	else
+		artifact_version="${artifact_prefix_version}${GIT_INFO_KERNEL[MAKEFILE_VERSION]}-${common_version_suffix}"
+	fi
 
 	declare -a reasons=(
 		"version \"${GIT_INFO_KERNEL[MAKEFILE_FULL_VERSION]}\""
@@ -102,6 +167,7 @@ function artifact_kernel_prepare_version() {
 		"patches hash \"${patches_hash}\""
 		".config hash \"${config_hash}\""
 		".config hook hash \"${kernel_config_modification_hash}\""
+		"variables hash \"${vars_config_hash}\""
 		"framework bash hash \"${bash_hash}\""
 	)
 
@@ -146,12 +212,11 @@ function artifact_kernel_cli_adapter_pre_run() {
 }
 
 function artifact_kernel_cli_adapter_config_prep() {
-	declare KERNEL_ONLY="yes"                             # @TODO: this is a hack, for the board/family code's benefit...
 	use_board="yes" prep_conf_main_minimal_ni < /dev/null # no stdin for this, so it bombs if tries to be interactive.
 }
 
 function artifact_kernel_get_default_oci_target() {
-	artifact_oci_target_base="ghcr.io/armbian/cache-kernel/"
+	artifact_oci_target_base="${GHCR_SOURCE}/armbian/cache-kernel/"
 }
 
 function artifact_kernel_is_available_in_local_cache() {

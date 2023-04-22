@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
 
 function build_rootfs_and_image() {
 	display_alert "Checking for rootfs cache" "$(echo "${BRANCH} ${BOARD} ${RELEASE} ${DESKTOP_APPGROUPS_SELECTED} ${DESKTOP_ENVIRONMENT} ${BUILD_MINIMAL}" | tr -s " ")" "info"
@@ -33,7 +40,7 @@ function build_rootfs_and_image() {
 	LOG_SECTION="customize_image" do_with_logging customize_image
 
 	# remove packages that are no longer needed. rootfs cache + uninstall might have leftovers.
-	LOG_SECTION="apt_purge_unneeded_packages" do_with_logging apt_purge_unneeded_packages
+	LOG_SECTION="apt_purge_unneeded_packages_and_clean_apt_caches" do_with_logging apt_purge_unneeded_packages_and_clean_apt_caches
 
 	# for reference, debugging / sanity checking
 	LOG_SECTION="list_installed_packages" do_with_logging list_installed_packages

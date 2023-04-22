@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
 
 function maybe_make_clean_uboot() {
 	if [[ $CLEAN_LEVEL == *make-uboot* ]]; then
@@ -53,7 +60,7 @@ function compile_uboot_target() {
 	PRE_CONFIG_UBOOT_TARGET
 
 	display_alert "${uboot_prefix}Preparing u-boot config" "${version} ${target_make}" "info"
-	export if_error_detail_message="${uboot_prefix}Failed to configure u-boot ${version} $BOOTCONFIG ${target_make}"
+	declare -g if_error_detail_message="${uboot_prefix}Failed to configure u-boot ${version} $BOOTCONFIG ${target_make}"
 	run_host_command_logged CCACHE_BASEDIR="$(pwd)" PATH="${toolchain}:${toolchain2}:${PATH}" \
 		"KCFLAGS=-fdiagnostics-color=always" \
 		unbuffer make "$CTHREADS" "$BOOTCONFIG" "CROSS_COMPILE=\"$CCACHE $UBOOT_COMPILER\""
@@ -137,6 +144,14 @@ function compile_uboot_target() {
 
 	fi
 
+	if [[ "${UBOOT_CONFIGURE:-"no"}" == "yes" ]]; then
+		display_alert "Configuring u-boot" "UBOOT_CONFIGURE=yes; experimental" "warn"
+		run_host_command_dialog make menuconfig
+		display_alert "Exporting saved config" "UBOOT_CONFIGURE=yes; experimental" "warn"
+		run_host_command_logged make savedefconfig
+		run_host_command_logged cp -v defconfig "${DEST}/defconfig-uboot-${BOARD}-${BRANCH}"
+	fi
+
 	# workaround when two compilers are needed
 	cross_compile="CROSS_COMPILE=\"$CCACHE $UBOOT_COMPILER\""
 	[[ -n $UBOOT_TOOLCHAIN2 ]] && cross_compile="ARMBIAN=foe" # empty parameter is not allowed
@@ -162,7 +177,7 @@ function compile_uboot_target() {
 	local uboot_cflags="${uboot_cflags_array[*]}"
 
 	display_alert "${uboot_prefix}Compiling u-boot" "${version} ${target_make} with gcc '${gcc_version_main}'" "info"
-	export if_error_detail_message="${uboot_prefix}Failed to build u-boot ${version} ${target_make}"
+	declare -g if_error_detail_message="${uboot_prefix}Failed to build u-boot ${version} ${target_make}"
 	do_with_ccache_statistics run_host_command_logged_long_running \
 		"CFLAGS='${uboot_cflags}'" "KCFLAGS='${uboot_cflags}'" \
 		CCACHE_BASEDIR="$(pwd)" PATH="${toolchain}:${toolchain2}:${PATH}" \
@@ -192,7 +207,27 @@ function loop_over_uboot_targets_and_do() {
 	# Sorry for the juggling with IFS.
 	local _old_ifs="${IFS}" _new_ifs=$'\n' uboot_target_counter=1
 	IFS="${_new_ifs}" # split on newlines only
+	display_alert "Looping over u-boot targets" "'${UBOOT_TARGET_MAP}'" "debug"
+
+	# save the current state of nullglob into a variable; don't fail
+	declare _old_nullglob
+	_old_nullglob="$(shopt -p nullglob || true)"
+	display_alert "previous state of nullglob" "'${_old_nullglob}'" "debug"
+
+	# disable nullglob; dont fail if already disabled
+	shopt -u nullglob || true
+
+	# store new state; don't fail
+	declare _new_nullglob
+	_new_nullglob="$(shopt -p nullglob || true)"
+	display_alert "new state of nullglob" "'${_new_nullglob}'" "debug"
+
 	for target in ${UBOOT_TARGET_MAP}; do
+		display_alert "Building u-boot target" "'${target}'" "debug"
+
+		# reset nullglob to _old_nullglob
+		eval "${_old_nullglob}"
+
 		IFS="${_old_ifs}" # restore for the body of loop
 		declare -g target uboot_name uboottempdir toolchain version
 		declare -g uboot_prefix="{u-boot:${uboot_target_counter}} "
@@ -206,7 +241,12 @@ function loop_over_uboot_targets_and_do() {
 		uboot_target_counter=$((uboot_target_counter + 1))
 		IFS="${_new_ifs}" # split on newlines only for rest of loop
 	done
+
 	IFS="${_old_ifs}"
+	# reset nullglob to _old_nullglob
+	eval "${_old_nullglob}"
+
+	return 0
 }
 
 function deploy_built_uboot_bins_for_one_target_to_packaging_area() {
@@ -370,6 +410,6 @@ function compile_uboot() {
 
 	done_with_temp_dir "${cleanup_id}" # changes cwd to "${SRC}" and fires the cleanup function early
 
-	display_alert "Built u-boot deb OK" "${uboot_name}.deb" "info"
+	display_alert "Built u-boot deb OK" "linux-u-boot-${BOARD}-${BRANCH} ${artifact_version}" "info"
 	return 0 # success
 }

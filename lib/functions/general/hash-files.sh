@@ -1,3 +1,12 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
 function calculate_hash_for_all_files_in_dirs() {
 	declare -a dirs_to_hash=("$@")
 	declare -a files_to_hash=()
@@ -52,4 +61,23 @@ function calculate_hash_for_files() {
 		display_alert "Hash for files:" "$hash_files" "debug"
 		display_alert "Full hash input for files:" "\n${full_hash}\n" "debug"
 	fi
+}
+
+# helper, not strictly about files, but about functions. still hashing, though. outer scope: declare hash_functions="undetermined"
+function calculate_hash_for_function_bodies() {
+	declare -a function_bodies=()
+	for func in "$@"; do
+		# skip if function doesn't exist...
+		if [[ $(type -t "${func}") != function ]]; then
+			continue
+		fi
+		function_bodies+=("$(declare -f "${func}")")
+	done
+
+	if [[ ${#function_bodies[@]} -eq 0 ]]; then
+		hash_functions="0000000000000000"
+	else
+		hash_functions="$(echo "${function_bodies[@]}" | sha256sum | cut -d' ' -f1)"
+	fi
+	return 0
 }

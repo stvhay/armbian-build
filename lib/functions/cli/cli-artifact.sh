@@ -1,3 +1,12 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
 function cli_artifact_pre_run() {
 	initialize_artifact "${WHAT}"
 	# Run the pre run adapter
@@ -8,9 +17,20 @@ function cli_artifact_run() {
 	: "${chosen_artifact:?chosen_artifact is not set}"
 	: "${chosen_artifact_impl:?chosen_artifact_impl is not set}"
 
+	if [[ "${CONFIG_DEFS_ONLY}" != "yes" ]]; then
+		# Make sure ORAS tooling is installed before starting.
+		run_tool_oras
+	fi
+
 	display_alert "artifact" "${chosen_artifact}" "debug"
 	display_alert "artifact" "${chosen_artifact} :: ${chosen_artifact_impl}()" "debug"
-	artifact_cli_adapter_config_prep # only if in cli.
+	declare -g artifact_version_requires_aggregation="no" # marker
+	artifact_cli_adapter_config_prep                      # only if in cli.
+
+	# if asked by _config_prep to aggregate, and HOSTRELEASE is not set, obtain it.
+	if [[ "${artifact_version_requires_aggregation}" == "yes" ]] && [[ -z "${HOSTRELEASE}" ]]; then
+		obtain_hostrelease_only # Sets HOSTRELEASE
+	fi
 
 	# When run in GHA, assume we're checking/updating the remote cache only.
 	# Local cache is ignored, and if found, it's not unpacked, either from local or remote.
@@ -43,6 +63,11 @@ function cli_artifact_run() {
 			ignore_local_cache="no"
 			deploy_to_remote="no"
 		fi
+	fi
+
+	# Force artifacts download we need to populate repository
+	if [[ "${FORCE_ARTIFACTS_DOWNLOAD}" == "yes" ]]; then
+		skip_unpack_if_found_in_caches="no"
 	fi
 
 	do_with_default_build obtain_complete_artifact # @TODO: < /dev/null -- but what about kernel configure?

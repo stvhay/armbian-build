@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
 function compile_kernel() {
 	declare kernel_work_dir="${SRC}/cache/sources/${LINUXSOURCEDIR}"
 	display_alert "Kernel build starting" "${LINUXSOURCEDIR}" "info"
@@ -88,6 +96,7 @@ function kernel_prepare_build_and_package() {
 	declare -A kernel_install_dirs
 
 	build_targets=("all") # "All" builds the vmlinux/Image/Image.gz default for the ${ARCH}
+	build_targets+=("${KERNEL_IMAGE_TYPE}")
 	declare cleanup_id="" kernel_dest_install_dir=""
 	prepare_temp_dir_in_workdir_and_schedule_cleanup "k" cleanup_id kernel_dest_install_dir # namerefs
 
@@ -98,7 +107,12 @@ function kernel_prepare_build_and_package() {
 		#["INSTALL_HDR_PATH"]="${kernel_dest_install_dir}/libc_headers" # Used by `make headers_install` - disabled, only used for libc headers
 	)
 
-	build_targets+=(install modules_install) # headers_install disabled, only used for libc headers
+	[ -z "${SRC_LOADADDR}" ] || install_make_params_quoted+=("${SRC_LOADADDR}") # For uImage
+	# @TODO: Only combining `install` and `modules_install` enable mixed-build and __build_one_by_one
+	# We should spilt the `build` and `install` into two make steps as the kernel required
+	build_targets+=("install" "${KERNEL_INSTALL_TYPE:-install}")
+
+	build_targets+=("modules_install") # headers_install disabled, only used for libc headers
 	if [[ "${KERNEL_BUILD_DTBS:-yes}" == "yes" ]]; then
 		display_alert "Kernel build will produce DTBs!" "DTBs YES" "debug"
 		build_targets+=("dtbs_install")

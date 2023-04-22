@@ -1,3 +1,12 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
 # This is not run under logging section.
 function kernel_prepare_bare_repo_decide_shallow_or_full() {
 	declare decision="not_yet_decided" decision_why="unknown"
@@ -126,7 +135,7 @@ function kernel_prepare_bare_repo_decide_shallow_or_full() {
 
 	display_alert "Using ${decision} Kernel bare tree for ${KERNEL_MAJOR_MINOR}" "${decision_why}" "info"
 
-	declare base_oras_ref="ghcr.io/armbian/shallow" # @TODO allow changing this
+	declare base_oras_ref="${GHCR_SOURCE}/armbian/shallow" # @TODO allow changing this
 	declare estimated_dl_size_mib=0 benefits="" cons=""
 	case "${decision}" in
 		shallow)

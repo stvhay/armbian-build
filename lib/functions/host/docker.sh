@@ -1,3 +1,12 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
 #############################################################################################################
 # @TODO: called by no-one, yet.
 function check_and_install_docker_daemon() {
@@ -126,7 +135,7 @@ function docker_cli_prepare() {
 	# If we're NOT building the public, official image, then USE the public, official image as base.
 	# IMPORTANT: This has to match the naming scheme for tag the is used in the GitHub actions workflow.
 	if [[ "${DOCKERFILE_USE_ARMBIAN_IMAGE_AS_BASE}" != "no" && "${DOCKER_SIMULATE_CLEAN}" != "yes" ]]; then
-		DOCKER_ARMBIAN_BASE_IMAGE="ghcr.io/armbian/docker-armbian-build:armbian-${wanted_os_tag}-${wanted_release_tag}-latest"
+		DOCKER_ARMBIAN_BASE_IMAGE="${DOCKER_ARMBIAN_BASE_COORDINATE_PREFIX:-"ghcr.io/armbian/docker-armbian-build:armbian-"}${wanted_os_tag}-${wanted_release_tag}-latest"
 		display_alert "Using prebuilt Armbian image as base for '${wanted_os_tag}-${wanted_release_tag}'" "DOCKER_ARMBIAN_BASE_IMAGE: ${DOCKER_ARMBIAN_BASE_IMAGE}" "info"
 	fi
 
@@ -238,6 +247,7 @@ function docker_cli_prepare_dockerfile() {
 
 	# initialize the extension manager; enable all extensions; only once..
 	if [[ "${docker_prepare_cli_skip_exts:-no}" != "yes" ]]; then
+		display_alert "Docker launcher" "enabling all extensions looking for Docker dependencies" "info"
 		enable_all_extensions_builtin_and_user
 		initialize_extension_manager
 	fi
@@ -253,7 +263,10 @@ function docker_cli_prepare_dockerfile() {
 	declare c="" # Nothing; commands will run.
 	if [[ "${DOCKER_SIMULATE_CLEAN}" == "yes" ]]; then
 		display_alert "Simulating" "clean build, due to DOCKER_SIMULATE_CLEAN=yes -- this is wasteful and slow and only for debugging" "warn"
-		c="## " # Add comment to simulate clean env
+		c="## Disabled by DOCKER_SIMULATE_CLEAN #" # Add comment to simulate clean env
+	elif [[ "${DOCKER_SKIP_UPDATE}" == "yes" && "${DOCKERFILE_USE_ARMBIAN_IMAGE_AS_BASE}" != "no" ]]; then
+		display_alert "Skipping Docker updates" "make sure base image '${DOCKER_ARMBIAN_BASE_IMAGE}' is up-to-date" "" "info"
+		c="## Disabled by DOCKER_SKIP_UPDATE # " # Add comment to simulate clean env
 	fi
 
 	declare c_req="# " # Nothing; commands will run.
@@ -338,8 +351,8 @@ function docker_cli_build_dockerfile() {
 	# If we get here without a local_image_sha, we need to build from scratch, so we need to re-create the Dockerfile.
 	if [[ -z "${local_image_sha}" ]]; then
 		display_alert "Base image not in local cache, building from scratch" "${DOCKER_ARMBIAN_BASE_IMAGE}" "info"
-		export DOCKERFILE_USE_ARMBIAN_IMAGE_AS_BASE=no
-		export DOCKER_ARMBIAN_BASE_IMAGE="${DOCKER_ARMBIAN_BASE_IMAGE_SCRATCH}"
+		declare -g DOCKERFILE_USE_ARMBIAN_IMAGE_AS_BASE=no
+		declare -g DOCKER_ARMBIAN_BASE_IMAGE="${DOCKER_ARMBIAN_BASE_IMAGE_SCRATCH}"
 		docker_prepare_cli_skip_exts="yes" docker_cli_prepare
 		display_alert "Re-created" "Dockerfile, proceeding, build from scratch" "debug"
 	fi
@@ -440,6 +453,7 @@ function docker_cli_prepare_launch() {
 		# - bind-mount the Docker config file (if it exists)
 		if [[ -n "${OCI_TARGET_BASE}" ]]; then
 			display_alert "Detected" "OCI_TARGET_BASE: '${OCI_TARGET_BASE}'" "debug"
+			DOCKER_ARGS+=("--env" "OCI_TARGET_BASE=${OCI_TARGET_BASE}")
 
 			# Mount the Docker config file (if it exists)
 			local docker_config_file_host="${HOME}/.docker/config.json"
@@ -449,6 +463,11 @@ function docker_cli_prepare_launch() {
 				DOCKER_ARGS+=("--mount" "type=bind,source=${docker_config_file_host},target=${docker_config_file_docker}")
 			fi
 		fi
+	fi
+
+	# If set, pass down the Windows Terminal Session, so the existance of Windows Terminal can be detected later
+	if [[ -n "${WT_SESSION}" ]]; then
+		DOCKER_ARGS+=("--env" "WT_SESSION=${WT_SESSION}")
 	fi
 
 	# This will receive the mountpoint as $1 and the mountpoint vars in the environment.
@@ -528,7 +547,8 @@ function docker_cli_prepare_launch() {
 }
 
 function docker_cli_launch() {
-	display_alert "Showing Docker cmdline" "Docker args: '${DOCKER_ARGS[*]}'" "debug"
+	# rpardini: This debug, although useful, might include very long/multiline strings, which make it very confusing.
+	# display_alert "Showing Docker cmdline" "Docker args: '${DOCKER_ARGS[*]}'" "debug"
 
 	# Hack: if we're running on a Mac/Darwin, get rid of .DS_Store files in critical directories.
 	if [[ "${OSTYPE}" == "darwin"* ]]; then
@@ -539,11 +559,21 @@ function docker_cli_launch() {
 		run_host_command_logged find "${SRC}/userpatches" -name ".DS_Store" -type f -delete "||" true
 	fi
 
-	display_alert "Relaunching in Docker" "${*}" "debug"
+	# Produce the re-launch params.
+	declare -g ARMBIAN_CLI_FINAL_RELAUNCH_ARGS=()
+	declare -g ARMBIAN_CLI_FINAL_RELAUNCH_ENVS=()
+	produce_relaunch_parameters # produces ARMBIAN_CLI_FINAL_RELAUNCH_ARGS and ARMBIAN_CLI_FINAL_RELAUNCH_ENVS
+
+	# Add the relaunch envs to DOCKER_ARGS.
+	for env in "${ARMBIAN_CLI_FINAL_RELAUNCH_ENVS[@]}"; do
+		display_alert "Adding Docker env" "${env}" "debug"
+		DOCKER_ARGS+=("--env" "${env}")
+	done
+
 	display_alert "-----------------Relaunching in Docker after ${SECONDS}s------------------" "here comes the 🐳" "info"
 
 	local -i docker_build_result
-	if docker run "${DOCKER_ARGS[@]}" "${DOCKER_ARMBIAN_INITIAL_IMAGE_TAG}" /bin/bash "${DOCKER_ARMBIAN_TARGET_PATH}/compile.sh" "$@"; then
+	if docker run "${DOCKER_ARGS[@]}" "${DOCKER_ARMBIAN_INITIAL_IMAGE_TAG}" /bin/bash "${DOCKER_ARMBIAN_TARGET_PATH}/compile.sh" "${ARMBIAN_CLI_FINAL_RELAUNCH_ARGS[@]}"; then
 		docker_build_result=$? # capture exit code of test done in the line above.
 		display_alert "-------------Docker run finished after ${SECONDS}s------------------------" "🐳 successfull" "info"
 	else

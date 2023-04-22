@@ -1,3 +1,11 @@
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+#
 UBOOT_TARGET_MAP="${UBOOT_TARGET_MAP:-u-boot-dtb.img;;u-boot.bin.sd.bin:u-boot.bin u-boot-dtb.img}"
 BOOTSCRIPT="boot-meson64.cmd:boot.cmd"
 BOOTENV_FILE='meson.txt'
@@ -8,6 +16,13 @@ SRC_LOADADDR='LOADADDR=0x1080000'
 BOOTBRANCH="${BOOTBRANCH_BOARD:-"tag:v2022.07"}"
 BOOTPATCHDIR="${BOOTPATCHDIR:-"v2022.07"}"
 OVERLAY_PREFIX='meson'
+
+# This is an extension method, put directly in meson64_common. A "built-in" extension if you will.
+# Bring in LibreELEC's amlogic-boot-fip repo, which is the authoritative source for FIP blobs.
+# To add FIP blobs for a new board, send a PR there, they're awesome.
+function fetch_sources_tools__libreelec_amlogic_fip() {
+	fetch_from_repo "https://github.com/LibreELEC/amlogic-boot-fip" "amlogic-boot-fip" "branch:master"
+}
 
 # this family does not need it
 ATF_COMPILE="no"
@@ -24,13 +39,13 @@ GOVERNOR=${GOVERNOR:-ondemand}
 case $BRANCH in
 
 	current)
-		export KERNEL_MAJOR_MINOR="6.1" # Major and minor versions of this kernel. For mainline caching.
+		declare -g KERNEL_MAJOR_MINOR="6.1" # Major and minor versions of this kernel. For mainline caching.
 		KERNELBRANCH='branch:linux-6.1.y'
 		KERNELPATCHDIR='meson64-current'
 		;;
 
 	edge)
-		export KERNEL_MAJOR_MINOR="6.2" # Major and minor versions of this kernel. For mainline caching.
+		declare -g KERNEL_MAJOR_MINOR="6.2" # Major and minor versions of this kernel. For mainline caching.
 		KERNELBRANCH='branch:linux-6.2.y'
 		KERNELPATCHDIR='meson64-edge'
 		;;
@@ -287,11 +302,4 @@ family_tweaks_bsp() {
 			EOF
 			;;
 	esac
-}
-
-# This is an extension method, put directly in meson64_common. A "built-in" extension if you will.
-# If used in more than one place, it could be moved to an extension: enable_extension "amlogic-fip-tools"
-function fetch_sources_tools__amlogic_fip() {
-	fetch_from_repo "https://github.com/armbian/odroidc2-blobs" "odroidc2-blobs" "branch:master"
-	fetch_from_repo "https://github.com/LibreELEC/amlogic-boot-fip" "amlogic-boot-fip" "branch:master"
 }

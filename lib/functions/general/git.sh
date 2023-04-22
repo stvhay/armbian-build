@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
 # defines the format for KERNELBRANCH, BOOTBRANCH, and arguments to fetch_from_repo.
 # branch:xxx, tag:yyyy, commit:zzzz, head.
 # sets: ref_type=branch|tag|commit, ref_name=xxx|yyyy|zzzz|HEAD
@@ -78,7 +86,7 @@ function fetch_from_repo() {
 	local git_work_dir
 
 	# Set GitHub mirror before anything else touches $url
-	url=${url//'https://github.com/'/$GITHUB_SOURCE'/'}
+	url="$(echo "$url" | sed "s|^https://github.com/|${GITHUB_SOURCE}/|")"
 
 	# The 'offline' variable must always be set to 'true' or 'false'
 	local offline=false

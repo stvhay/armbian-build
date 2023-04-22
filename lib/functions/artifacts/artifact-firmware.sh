@@ -1,3 +1,17 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
+function artifact_firmware_config_dump() {
+	# artifact_input_variables: None, for firmware.
+	:
+}
+
 function artifact_firmware_prepare_version() {
 	artifact_version="undetermined"        # outer scope
 	artifact_version_reason="undetermined" # outer scope
@@ -14,6 +28,9 @@ function artifact_firmware_prepare_version() {
 	run_memoized GIT_INFO_ARMBIAN_FIRMWARE "git2info" memoized_git_ref_to_info
 	debug_dict GIT_INFO_ARMBIAN_FIRMWARE
 
+	# Sanity check, the SHA1 gotta be sane.
+	[[ "${GIT_INFO_ARMBIAN_FIRMWARE[SHA1]}" =~ ^[0-9a-f]{40}$ ]] || exit_with_error "SHA1 is not sane: '${GIT_INFO_ARMBIAN_FIRMWARE[SHA1]}'"
+
 	declare fake_unchanging_base_version="1"
 
 	declare short_sha1="${GIT_INFO_ARMBIAN_FIRMWARE[SHA1]:0:${short_hash_size}}"
@@ -25,7 +42,7 @@ function artifact_firmware_prepare_version() {
 	declare bash_hash_short="${bash_hash:0:${short_hash_size}}"
 
 	# outer scope
-	artifact_version="${fake_unchanging_base_version}-SA${short_sha1}-B${bash_hash_short}"
+	artifact_version="${artifact_prefix_version}${fake_unchanging_base_version}-SA${short_sha1}-B${bash_hash_short}"
 
 	declare -a reasons=(
 		"Armbian firmware git revision \"${GIT_INFO_ARMBIAN_FIRMWARE[SHA1]}\""
@@ -62,12 +79,11 @@ function artifact_firmware_cli_adapter_pre_run() {
 }
 
 function artifact_firmware_cli_adapter_config_prep() {
-	declare KERNEL_ONLY="yes"                            # @TODO: this is a hack, for the board/family code's benefit...
 	use_board="no" prep_conf_main_minimal_ni < /dev/null # no stdin for this, so it bombs if tries to be interactive.
 }
 
 function artifact_firmware_get_default_oci_target() {
-	artifact_oci_target_base="ghcr.io/armbian/cache-firmware/"
+	artifact_oci_target_base="${GHCR_SOURCE}/armbian/cache-firmware/"
 }
 
 function artifact_firmware_is_available_in_local_cache() {

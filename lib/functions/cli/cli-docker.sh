@@ -1,3 +1,12 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+
 function cli_docker_pre_run() {
 	if [[ "${DOCKERFILE_GENERATE_ONLY}" == "yes" ]]; then
 		display_alert "Dockerfile generation only" "func cli_docker_pre_run" "debug"
@@ -8,7 +17,7 @@ function cli_docker_pre_run() {
 		shell)
 			# inside-function-function: a dynamic hook, only triggered if this CLI runs.
 			function add_host_dependencies__ssh_client_for_docker_shell_over_ssh() {
-				export EXTRA_BUILD_DEPS="${EXTRA_BUILD_DEPS} openssh-client"
+				declare -g EXTRA_BUILD_DEPS="${EXTRA_BUILD_DEPS} openssh-client"
 			}
 			declare -g DOCKER_PASS_SSH_AGENT="yes" # Pass SSH agent to docker
 			;;
@@ -46,9 +55,6 @@ function cli_docker_run() {
 	ARMBIAN_CLI_RELAUNCH_PARAMS+=(["ARMBIAN_BUILD_UUID"]="${ARMBIAN_BUILD_UUID}") # pass down our uuid to the docker instance
 	ARMBIAN_CLI_RELAUNCH_PARAMS+=(["SKIP_LOG_ARCHIVE"]="yes")                     # launched docker instance will not cleanup logs.
 
-	declare -g ARMBIAN_CLI_RELAUNCH_ARGS=()
-	produce_relaunch_parameters # produces ARMBIAN_CLI_RELAUNCH_ARGS
-
 	case "${DOCKER_SUBCMD}" in
 		shell)
 			display_alert "Launching Docker shell" "docker-shell" "info"
@@ -64,7 +70,7 @@ function cli_docker_run() {
 			# this does NOT exit with the same exit code as the docker instance.
 			# instead, it sets the docker_exit_code variable.
 			declare -i docker_exit_code docker_produced_logs=0
-			docker_cli_launch "${ARMBIAN_CLI_RELAUNCH_ARGS[@]}" # MARK: this "re-launches" using the passed params.
+			docker_cli_launch # MARK: this "re-launches"
 
 			# Set globals to avoid:
 			# 1) showing the controlling host's log; we only want to show a ref to the Docker logfile, unless it didn't produce one.

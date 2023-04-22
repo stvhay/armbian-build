@@ -1,4 +1,12 @@
-#! /bin/env python3
+#!/usr/bin/env python3
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (c) 2013-2023 Igor Pecovnik, igor@armbian.com
+#
+# This file is a part of the Armbian Build Framework
+# https://github.com/armbian/build/
+#
 import logging
 import os
 
@@ -222,6 +230,7 @@ if apply_patches:
 		if BASE_GIT_TAG is None:
 			raise Exception("BASE_GIT_REVISION or BASE_GIT_TAG must be set")
 		else:
+			log.debug(f"Getting revision of BASE_GIT_TAG={BASE_GIT_TAG}")
 			BASE_GIT_REVISION = git_repo.tags[BASE_GIT_TAG].commit.hexsha
 			log.debug(f"Found BASE_GIT_REVISION={BASE_GIT_REVISION} for BASE_GIT_TAG={BASE_GIT_TAG}")
 
