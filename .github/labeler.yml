@@ -1,7 +1,7 @@
 # This configures label matching for PR's.
 #
-# The keys are labels, and the values are lists of minimatch patterns
-# to which those labels apply.
+# The keys are labels, and the values use the actions/labeler v7
+# changed-files schema with minimatch patterns.
 #
 # NOTE: This can only add labels, not remove them.
 # NOTE: Due to YAML syntax limitations, patterns or labels which start
@@ -11,26 +11,32 @@
 # Please keep the labels sorted and deduplicated.
 
 "Hardware :gear:":
-  - patch/u-boot/*
-  - patch/u-boot/**/*
-  - patch/atf/*
-  - config/bootenv/*
-  - config/bootscripts/*
-  - patch/kernel/*
-  - patch/kernel/**/*
-  - patch/misc/*
-  - config/kernel/*
-  - config/sources/*
-  - config/sources/**/*
-  - config/boards/*
-  - config/bootscripts/*
-  - config/bootenv/*
+  - changed-files:
+      - any-glob-to-any-file:
+          - patch/u-boot/*
+          - patch/u-boot/**/*
+          - patch/atf/*
+          - config/bootenv/*
+          - config/bootscripts/*
+          - patch/kernel/*
+          - patch/kernel/**/*
+          - patch/misc/*
+          - config/kernel/*
+          - config/sources/*
+          - config/sources/**/*
+          - config/boards/*
+          - config/bootscripts/*
+          - config/bootenv/*
 
 "Software :chains:":
-  - lib/*
-  - tools/*
-  - config/cli/*
-  - .github/workflows/*
+  - changed-files:
+      - any-glob-to-any-file:
+          - lib/*
+          - tools/*
+          - config/cli/*
+          - .github/workflows/*
 
 "Desktop :desktop_computer:":
-  - config/desktop/*
+  - changed-files:
+      - any-glob-to-any-file:
+          - config/desktop/*
